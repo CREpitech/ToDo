@@ -5,7 +5,7 @@
   <div>
     <to-do-form @todo-added="addToDo"></to-do-form>
   </div>
-  
+
   <div>
      <h2 id="list-summary" ref='listSummary' tabIndex="-1">{{listSummary}}</h2>
     <div aria-labelledby="list-summary" class="stack-large">
@@ -14,7 +14,7 @@
         @item-edited="editToDo(item.id, $event)"></todo-item>
       </div>
     </div>
-    
+
   </div>
 </template>
 <!--App.vue
@@ -31,7 +31,7 @@
  -->
 <script>
 import TodoItem from "./components/TodoItem.vue";
-import uniqueId from "lodash.uniqueid";
+// import uniqueId from "lodash.uniqueid";
 import ToDoForm from './components/ToDoForm.vue'
 
 export default {
@@ -42,24 +42,25 @@ export default {
   },
   data() {
     return {
-      TodoItems: [
-        { id: uniqueId("todo-"), label: "Learn Vue.js", done: false },
-        { id: uniqueId("todo-"), label: "aaa", done: false },
-        { id: uniqueId("todo-"), label: "ride more bike", done: false },
-        { id: uniqueId("todo-"), label: "Study for Life", done: false },
-      ],
+      TodoItems: [],
+      // TodoItems: [
+      //   { id: uniqueId("todo-"), label: "Learn Vue.js", done: false },
+      //   { id: uniqueId("todo-"), label: "aaa", done: false },
+      //   { id: uniqueId("todo-"), label: "ride more bike", done: false },
+      //   { id: uniqueId("todo-"), label: "Study for Life", done: false },
+      // ],
     };
   },
   mounted(){
     if(localStorage.TodoItems){
       this.TodoItems = JSON.parse(localStorage.TodoItems)
-      
+
       console.log("there are items in localstorage func so that if return true")
     } else {
       console.log("au contraire")
       localStorage.setItem('Items', this.TodoItems )
     }
-   
+
   },
   watch:{
     TodoItems:{
@@ -70,32 +71,98 @@ export default {
 
     }
   },
-  
+
   methods:{
-    addToDo(toDoLabel){
-      
-      this.TodoItems.push({id:uniqueId('todo-'), label:toDoLabel, done:false});
+    async addToDo(toDoLabel){
+
+      // this.TodoItems.push({id:uniqueId('todo-'), label:toDoLabel, done:false});
       /* console.log("New ToDo Submmited " + toDoLabel) */
+      //------------------------------------------------//
+      let task = {
+        label: toDoLabel,
+        done: false
+      }
+      const res = await fetch('http://localhost:3000/api/notes',{
+        method: 'POST',
+        headers: {
+          'content-type': 'application/json',
+        },
+        body: JSON.stringify(task)
+      })
+      const data = await res.json()
+      this.TodoItems = [...this.TodoItems, data.data]
+      //---------------------------------------------------//
     },
-    updateDoneStatus(toDoId){
-      const toDoUpdate = this.TodoItems.find(item => item.id === toDoId)
-      toDoUpdate.done = !toDoUpdate.done
+    async updateDoneStatus(toDoId){
+      // const toDoUpdate = this.TodoItems.find(item => item.id === toDoId)
+      // toDoUpdate.done = !toDoUpdate.done
+      //---------------------------------------------//
+      const taskToToggle = await this.fetchTask(toDoId)
+      const updTask = {...taskToToggle,done:!taskToToggle.done}
+      const res = await fetch(`http://localhost:3000/api/notes/${toDoId}`,{
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(updTask)
+      })
+      const data = await res.json()
+      if(data.success){
+        this.TodoItems = this.TodoItems.map((task)=> task.id === toDoId ? {...task, done: !taskToToggle.done} : task )
+      }
+      //--------------------------------------------------//
     },
-    deleteToDo(toDoId){
-       const itemIndex = this.TodoItems.findIndex(item => item.id === toDoId);
-       this.TodoItems.splice(itemIndex, 1);
-       this.$refs.listSummary.focus();
-   },
-   editToDo(toDoId, newLabel){
-     const toDoToEdit = this.TodoItems.find(item => item.id === toDoId);
-     toDoToEdit.label = newLabel;
-   }
+    async deleteToDo(toDoId){
+      // const itemIndex = this.TodoItems.findIndex(item => item.id === toDoId);
+      // this.TodoItems.splice(itemIndex, 1);
+      // this.$refs.listSummary.focus();
+      //-------------------------------------------------------//
+      if(confirm("Are you sure?")){
+        const res = await fetch(`http://localhost:3000/api/notes/${toDoId}`,{
+          method: 'DELETE'
+        })
+        res.status === 200 ? (this.TodoItems = this.TodoItems.filter((task)=>task.id !== toDoId)) : alert('Error deleting task')
+      }
+      //-------------------------------------------------------//
+    },
+    async editToDo(toDoId, newLabel){
+      // const toDoToEdit = this.TodoItems.find(item => item.id === toDoId);
+      // toDoToEdit.label = newLabel;
+      //----------------------------------------------------//
+      const taskToToggle = await this.fetchTask(toDoId)
+      const updTask = {...taskToToggle,label:newLabel}
+      const res = await fetch(`http://localhost:3000/api/notes/${toDoId}`,{
+        method: 'PUT',
+        headers: {
+          'content-type': 'application/json'
+        },
+        body: JSON.stringify(updTask)
+      })
+      const data = await res.json()
+      if(data.success){
+        this.TodoItems = this.TodoItems.map((task)=> task.id === toDoId ? {...task, label: newLabel} : task )
+      }
+      //------------------------------------------------------//
+    },
+    async fetchTasks(){
+      const res = await fetch('http://localhost:3000/api/notes')
+      const data = await res.json()
+      return data.data
+    },
+    async fetchTask(id){
+      const res = await fetch(`http://localhost:3000/api/notes/${id}`)
+      const data = await res.json()
+      return data.data
+    }
   },
   computed: {
     listSummary() {
       const numberFinishedItems = this.TodoItems.filter(item =>item.done).length
       return `${numberFinishedItems} out of ${this.TodoItems.length} items completed`
     }
+  },
+  async created() {
+    this.TodoItems = await this.fetchTasks()
   }
 };
 </script>
@@ -181,7 +248,7 @@ export default {
   width: 200px;
   align-self: center;
   background-color: yellow;
-  
+
 }
 .stack-small:hover{
  box-shadow: 0 2px 8px 0 rgba(0, 0, 0, 0.2)
@@ -230,7 +297,7 @@ export default {
   margin:0;
   margin-bottom: 1rem;
 }
-/*Next Comment is the Vue's Default style for div id="App" i'll leave it ther, but we can delete 
+/*Next Comment is the Vue's Default style for div id="App" i'll leave it ther, but we can delete
 /* #app {
   font-family: Avenir, Helvetica, Arial, sans-serif;
   -webkit-font-smoothing: antialiased;
@@ -244,4 +311,3 @@ export default {
   <HelloWorld msg="Welcome to Your Vue.js App"/> //script  import HelloWorld from './components/HelloWorld.vue'  //script.export  /*  components: {
     HelloWorld
   } */ -->
-  
